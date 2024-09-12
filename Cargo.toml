@@ -1,0 +1,34 @@
+[package]
+authors = ["Rafael Koch <rafael.koch@gmx.net>"]
+name = "moving_median"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "A no-std moving median filter"
+categories = ["no-std", "embedded"]
+keywords = ["moving median", "filter"]
+readme = "README.md"
+repository = "https://github.com/1-rafael-1/moving_median"
+documentation = "https://docs.rs/moving_median"
+
+[dependencies]
+
+# cargo build/run
+[profile.dev]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 1
+overflow-checks = true
+lto = "off"
+
+# cargo build/run --release
+[profile.release]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false
