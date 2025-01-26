@@ -15,7 +15,6 @@
 //! filter_f32.add_value(42.0);
 //! filter_f32.add_value(43.0);
 //! filter_f32.add_value(41.0);
-//!
 //! assert_eq!(filter_f32.median(), 42.0);
 //! ```
 //!
@@ -26,8 +25,19 @@
 //! filter_f64.add_value(42.0);
 //! filter_f64.add_value(43.0);
 //! filter_f64.add_value(41.0);
-//!
 //! assert_eq!(filter_f64.median(), 42.0);
+//! ```
+//!
+//! //!
+//! ```
+//! use moving_median::MovingMedian;
+//!
+//! let mut filter_f64 = MovingMedian::<f64, 3>::new();
+//! filter_f64.add_value(42.0);
+//! filter_f64.add_value(43.0);
+//! filter_f64.add_value(41.0);
+//! filter_f64.clear();
+//! assert_eq!(filter_f64.median(), 0.0);
 //! ```
 
 #![no_std]
@@ -103,6 +113,15 @@ where
             sorted_buffer[self.count / 2]
         }
     }
+
+    /// clear the buffer
+    /// The buffer will be filled with default values
+    /// The count and index will be set to 0
+    pub fn clear(&mut self) {
+        self.buffer = [T::default(); N];
+        self.count = 0;
+        self.index = 0;
+    }
 }
 
 #[cfg(test)]
@@ -157,5 +176,15 @@ mod tests {
         filter.add_value(43.0); // should be the median
         filter.add_value(41.0);
         assert_eq!(filter.median(), 43.0);
+    }
+
+    #[test]
+    fn median_is_zero_when_cleared() {
+        let mut filter = MovingMedian::<f64, 3>::new();
+        filter.add_value(42.0);
+        filter.add_value(43.0);
+        filter.add_value(41.0);
+        filter.clear();
+        assert_eq!(filter.median(), 0.0);
     }
 }

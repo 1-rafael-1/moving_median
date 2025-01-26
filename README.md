@@ -11,17 +11,25 @@ This implementation supports both f32 and f64 types.
 ```Rust
 use moving_median::MovingMedian;
 
+// f32
 let mut filter_f32 = MovingMedian::<f32, 3>::new();
 filter_f32.add_value(42.0);
 filter_f32.add_value(43.0);
 filter_f32.add_value(41.0);
-
 assert_eq!(filter_f32.median(), 42.0);
 
+// f64
 let mut filter_f64 = MovingMedian::<f64, 3>::new();
 filter_f64.add_value(42.0);
 filter_f64.add_value(43.0);
 filter_f64.add_value(41.0);
-
 assert_eq!(filter_f64.median(), 42.0);
+
+// clearing existing data
+let mut filter_f64 = MovingMedian::<f64, 3>::new();
+filter_f64.add_value(42.0);
+filter_f64.add_value(43.0);
+filter_f64.add_value(41.0);
+filter.clear();
+assert_eq!(filter.median(), 0.0);
 ```
