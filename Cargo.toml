@@ -1,7 +1,8 @@
 [package]
 authors = ["Rafael Koch <rafael.koch@gmx.net>"]
 name = "moving_median"
-version = "0.3.0"
+version = "0.4.0"
+rust-version = "1.87"
 edition = "2021"
 license = "MIT"
 description = "A no-std moving median filter"
@@ -10,6 +11,12 @@ keywords = ["median", "filter"]
 readme = "README.md"
 repository = "https://github.com/1-rafael-1/moving_median"
 documentation = "https://docs.rs/moving_median"
+
+[lints.clippy]
+all     = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery  = { level = "warn", priority = -1 }
+cargo    = { level = "warn", priority = -1 }
 
 [dependencies]
 
