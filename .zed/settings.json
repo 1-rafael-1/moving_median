@@ -1,11 +1,25 @@
 {
+  "inlay_hints": {
+    "enabled": true,
+    "show_type_hints": true,
+    "show_parameter_hints": true,
+    "show_other_hints": true,
+  },
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
         "check": {
-          "command": "clippy"
-        }
-      }
-    }
-  }
+          "command": "clippy",
+        },
+        "inlayHints": {
+          "bindingModeHints": { "enable": true },
+          "chainingHints": { "enable": true },
+          "closureReturnTypeHints": { "enable": "always" },
+          "lifetimeElisionHints": { "enable": "skip_trivial" },
+          "parameterHints": { "enable": true },
+          "typeHints": { "enable": true },
+        },
+      },
+    },
+  },
 }
