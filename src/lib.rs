@@ -12,9 +12,9 @@
 //! use moving_median::MovingMedian;
 //!
 //! let mut filter_f32 = MovingMedian::<f32, 3>::new();
-//! filter_f32.add_value(42.0);
-//! filter_f32.add_value(43.0);
-//! filter_f32.add_value(41.0);
+//! filter_f32.add_value(42.0).unwrap();
+//! filter_f32.add_value(43.0).unwrap();
+//! filter_f32.add_value(41.0).unwrap();
 //! assert_eq!(filter_f32.median(), Some(42.0_f32));
 //! ```
 //!
@@ -22,9 +22,9 @@
 //! use moving_median::MovingMedian;
 //!
 //! let mut filter_f64 = MovingMedian::<f64, 3>::new();
-//! filter_f64.add_value(42.0);
-//! filter_f64.add_value(43.0);
-//! filter_f64.add_value(41.0);
+//! filter_f64.add_value(42.0).unwrap();
+//! filter_f64.add_value(43.0).unwrap();
+//! filter_f64.add_value(41.0).unwrap();
 //! assert_eq!(filter_f64.median(), Some(42.0_f64));
 //! ```
 //!
@@ -32,9 +32,9 @@
 //! use moving_median::MovingMedian;
 //!
 //! let mut filter_f64 = MovingMedian::<f64, 3>::new();
-//! filter_f64.add_value(42.0);
-//! filter_f64.add_value(43.0);
-//! filter_f64.add_value(41.0);
+//! filter_f64.add_value(42.0).unwrap();
+//! filter_f64.add_value(43.0).unwrap();
+//! filter_f64.add_value(41.0).unwrap();
 //! filter_f64.clear();
 //! assert_eq!(filter_f64.median(), None);
 //! ```
@@ -42,7 +42,21 @@
 #![no_std]
 
 use core::cmp::PartialOrd;
+use core::fmt;
 use core::ops::{Add, Div};
+
+/// Error returned by [`MovingMedian::add_value`] when a NaN value is rejected.
+///
+/// NaN cannot be meaningfully sorted or compared, so it is rejected at the point
+/// of insertion rather than silently producing a meaningless median.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NanError;
+
+impl fmt::Display for NanError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "NaN values are not supported by MovingMedian")
+    }
+}
 
 /// A simple no-std moving median filter implementation with a fixed-size buffer.
 ///
@@ -96,18 +110,25 @@ where
     }
 
     /// Add a new measurement to the buffer.
-    /// If the buffer is full, the oldest value will be replaced.
-    /// The buffer will always contain the last N measurements.
-    /// The count will be incremented up to N.
-    pub const fn add_value(&mut self, value: T) {
-        // Add the new value to the buffer
+    ///
+    /// Returns `Err(NanError)` if `value` is NaN, leaving the buffer unchanged.
+    ///
+    /// If the buffer is full the oldest value is replaced.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`NanError`] if `value` is NaN.
+    pub fn add_value(&mut self, value: T) -> Result<(), NanError> {
+        #[allow(clippy::eq_op)] // intentional NaN detection: NaN != NaN is true
+        if value != value {
+            return Err(NanError);
+        }
         self.buffer[self.index] = value;
-        // Move to the next index, wrapping around if necessary
         self.index = (self.index + 1) % N;
-        // Increment the count up to N
         if self.count < N {
             self.count += 1;
         }
+        Ok(())
     }
 
     /// Calculate the median of the values in the buffer.
@@ -226,7 +247,13 @@ where
         }
     }
 
-    /// Create a copy of the buffer and sort it
+    /// Create a sorted copy of the active buffer window.
+    ///
+    /// Uses `sort_unstable_by` with `partial_cmp`, falling back to `Ordering::Equal` when
+    /// the comparison returns `None`. For `f32`/`f64` this only occurs with `NaN`: if `NaN`
+    /// is present in the buffer the sort order is unspecified and the resulting median,
+    /// min, or max will be meaningless. For a sensor-data filter `NaN` indicates a
+    /// upstream data problem that should be handled before values reach this filter.
     fn sort(&self) -> [T; N] {
         let mut sorted = self.buffer;
         sorted[..self.count]
@@ -250,7 +277,7 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn median_is_value_when_one_value_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
+        filter.add_value(42.0).unwrap();
         assert_eq!(filter.median(), Some(42.0));
     }
 
@@ -258,8 +285,8 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn median_is_average_of_two_values_when_two_values_added() {
         let mut filter = MovingMedian::<f64, 2>::new();
-        filter.add_value(42.0);
-        filter.add_value(43.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.median(), Some(42.5));
     }
 
@@ -267,9 +294,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn median_is_middle_value_when_three_values_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
-        filter.add_value(43.0);
-        filter.add_value(41.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
+        filter.add_value(41.0).unwrap();
         assert_eq!(filter.median(), Some(42.0));
     }
 
@@ -277,21 +304,21 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn median_is_average_of_two_middle_values_when_four_values_added() {
         let mut filter = MovingMedian::<f64, 4>::new();
-        filter.add_value(42.0);
-        filter.add_value(43.0);
-        filter.add_value(41.0);
-        filter.add_value(44.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
+        filter.add_value(41.0).unwrap();
+        filter.add_value(44.0).unwrap();
         assert_eq!(filter.median(), Some(42.5));
     }
 
     #[test]
     #[allow(clippy::float_cmp)]
-    fn median_is_midlle_value_of_n_values_when_more_than_n_values_added() {
+    fn median_is_middle_value_of_n_values_when_more_than_n_values_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0); // should be pushed out
-        filter.add_value(44.0);
-        filter.add_value(43.0); // should be the median
-        filter.add_value(41.0);
+        filter.add_value(42.0).unwrap(); // should be pushed out
+        filter.add_value(44.0).unwrap();
+        filter.add_value(43.0).unwrap(); // should be the median
+        filter.add_value(41.0).unwrap();
         assert_eq!(filter.median(), Some(43.0));
     }
 
@@ -299,9 +326,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn median_is_none_when_cleared() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
-        filter.add_value(43.0);
-        filter.add_value(41.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
+        filter.add_value(41.0).unwrap();
         filter.clear();
         assert_eq!(filter.median(), None);
     }
@@ -317,21 +344,21 @@ mod tests {
     #[test]
     fn len_grows_as_values_are_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
+        filter.add_value(1.0).unwrap();
         assert_eq!(filter.len(), 1);
-        filter.add_value(2.0);
+        filter.add_value(2.0).unwrap();
         assert_eq!(filter.len(), 2);
-        filter.add_value(3.0);
+        filter.add_value(3.0).unwrap();
         assert_eq!(filter.len(), 3);
     }
 
     #[test]
     fn len_does_not_exceed_capacity() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
-        filter.add_value(2.0);
-        filter.add_value(3.0);
-        filter.add_value(4.0);
+        filter.add_value(1.0).unwrap();
+        filter.add_value(2.0).unwrap();
+        filter.add_value(3.0).unwrap();
+        filter.add_value(4.0).unwrap();
         assert_eq!(filter.len(), 3);
     }
 
@@ -344,14 +371,14 @@ mod tests {
     #[test]
     fn is_empty_is_false_after_value_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
+        filter.add_value(1.0).unwrap();
         assert!(!filter.is_empty());
     }
 
     #[test]
     fn is_empty_is_true_after_clear() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
+        filter.add_value(1.0).unwrap();
         filter.clear();
         assert!(filter.is_empty());
     }
@@ -359,27 +386,27 @@ mod tests {
     #[test]
     fn is_full_is_false_when_not_enough_values_added() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
-        filter.add_value(2.0);
+        filter.add_value(1.0).unwrap();
+        filter.add_value(2.0).unwrap();
         assert!(!filter.is_full());
     }
 
     #[test]
     fn is_full_is_true_when_buffer_full() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
-        filter.add_value(2.0);
-        filter.add_value(3.0);
+        filter.add_value(1.0).unwrap();
+        filter.add_value(2.0).unwrap();
+        filter.add_value(3.0).unwrap();
         assert!(filter.is_full());
     }
 
     #[test]
     fn is_full_remains_true_after_window_rolls() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(1.0);
-        filter.add_value(2.0);
-        filter.add_value(3.0);
-        filter.add_value(4.0);
+        filter.add_value(1.0).unwrap();
+        filter.add_value(2.0).unwrap();
+        filter.add_value(3.0).unwrap();
+        filter.add_value(4.0).unwrap();
         assert!(filter.is_full());
     }
 
@@ -401,9 +428,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn min_returns_smallest_value() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
-        filter.add_value(41.0);
-        filter.add_value(43.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(41.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.min(), Some(41.0));
     }
 
@@ -411,10 +438,10 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn min_reflects_rolling_window() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(41.0); // will be pushed out
-        filter.add_value(43.0);
-        filter.add_value(44.0);
-        filter.add_value(45.0);
+        filter.add_value(41.0).unwrap(); // will be pushed out
+        filter.add_value(43.0).unwrap();
+        filter.add_value(44.0).unwrap();
+        filter.add_value(45.0).unwrap();
         assert_eq!(filter.min(), Some(43.0));
     }
 
@@ -430,9 +457,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn max_returns_largest_value() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
-        filter.add_value(41.0);
-        filter.add_value(43.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(41.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.max(), Some(43.0));
     }
 
@@ -440,10 +467,10 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn max_reflects_rolling_window() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(45.0); // will be pushed out
-        filter.add_value(41.0);
-        filter.add_value(42.0);
-        filter.add_value(43.0);
+        filter.add_value(45.0).unwrap(); // will be pushed out
+        filter.add_value(41.0).unwrap();
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.max(), Some(43.0));
     }
 
@@ -459,9 +486,9 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn stats_returns_min_median_max() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(42.0);
-        filter.add_value(41.0);
-        filter.add_value(43.0);
+        filter.add_value(42.0).unwrap();
+        filter.add_value(41.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.stats(), Some((41.0, 42.0, 43.0)));
     }
 
@@ -469,10 +496,10 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn stats_with_even_count_averages_median() {
         let mut filter = MovingMedian::<f64, 4>::new();
-        filter.add_value(41.0);
-        filter.add_value(42.0);
-        filter.add_value(43.0);
-        filter.add_value(44.0);
+        filter.add_value(41.0).unwrap();
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
+        filter.add_value(44.0).unwrap();
         assert_eq!(filter.stats(), Some((41.0, 42.5, 44.0)));
     }
 
@@ -480,11 +507,35 @@ mod tests {
     #[allow(clippy::float_cmp)]
     fn stats_reflects_rolling_window() {
         let mut filter = MovingMedian::<f64, 3>::new();
-        filter.add_value(99.0); // will be pushed out
-        filter.add_value(41.0);
-        filter.add_value(42.0);
-        filter.add_value(43.0);
+        filter.add_value(99.0).unwrap(); // will be pushed out
+        filter.add_value(41.0).unwrap();
+        filter.add_value(42.0).unwrap();
+        filter.add_value(43.0).unwrap();
         assert_eq!(filter.stats(), Some((41.0, 42.0, 43.0)));
+    }
+
+    // --- NaN rejection ---
+
+    #[test]
+    fn add_value_rejects_nan() {
+        let mut filter = MovingMedian::<f64, 3>::new();
+        assert_eq!(filter.add_value(f64::NAN), Err(NanError));
+        assert!(filter.is_empty());
+    }
+
+    #[test]
+    fn add_value_does_not_alter_buffer_on_nan() {
+        let mut filter = MovingMedian::<f64, 3>::new();
+        filter.add_value(42.0).unwrap();
+        let _ = filter.add_value(f64::NAN);
+        assert_eq!(filter.len(), 1);
+        assert_eq!(filter.median(), Some(42.0));
+    }
+
+    #[test]
+    fn add_value_accepts_valid_f64() {
+        let mut filter = MovingMedian::<f64, 3>::new();
+        assert!(filter.add_value(42.0).is_ok());
     }
 
     // --- integer types ---
@@ -492,17 +543,17 @@ mod tests {
     #[test]
     fn integer_odd_count_median_is_exact() {
         let mut filter = MovingMedian::<i32, 3>::new();
-        filter.add_value(10);
-        filter.add_value(20);
-        filter.add_value(30);
+        filter.add_value(10).unwrap();
+        filter.add_value(20).unwrap();
+        filter.add_value(30).unwrap();
         assert_eq!(filter.median(), Some(20));
     }
 
     #[test]
     fn integer_even_count_median_truncates() {
         let mut filter = MovingMedian::<i32, 2>::new();
-        filter.add_value(10);
-        filter.add_value(11);
+        filter.add_value(10).unwrap();
+        filter.add_value(11).unwrap();
         // integer division: (10 + 11) / 2 = 10, not 10.5
         assert_eq!(filter.median(), Some(10));
     }
